@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transportation and Capital Goods Hub</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="setores_news.js"></script>
+<script src="acoes.js"></script>
+<script src="precos.js"></script>
+<style>
+  :root {
+    --black: #000000;
+    --orange: #FF6200;
+    --orange-dark: #d75300;
+    --yellow: #FFB600;
+    --green: #2e9c7f;
+    --green-bg: #eaf6f1;
+    --red: #c0392b;
+    --red-bg: #fdecea;
+    --gray: #BFBFBF;
+    --gray-50: #f7f7f7;
+    --gray-100: #ececec;
+    --gray-200: #dcdcdc;
+    --gray-300: #c8c8c8;
+    --text: #1a1a1a;
+    --text-muted: #6b6b6b;
+    --border: #e5e5e5;
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(0,0,0,.05);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter','Segoe UI',Arial,sans-serif; background: var(--gray-50); color: var(--text); }
+  a { color: inherit; text-decoration: none; }
+
+  .topbar {
+    background: var(--black); color: #fff;
+    padding: 14px 28px; display: flex;
+    align-items: center; justify-content: space-between;
+    border-bottom: 3px solid var(--orange);
+    height: 60px;
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-mark {
+    width: 32px; height: 32px; border-radius: 6px;
+    background: var(--orange); color: #fff; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.05rem;
+  }
+  .logo-text { font-weight: 700; font-size: 1rem; line-height: 1.15; }
+  .logo-text span {
+    display: block; font-size: .68rem; color: var(--gray);
+    font-weight: 500; letter-spacing: .3px; text-transform: uppercase;
+    margin-top: 1px;
+  }
+  .user { font-size: .8rem; color: #fff; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .logout-btn {
+    background: transparent; color: #fff;
+    border: 1px solid rgba(255,255,255,.25);
+    font-size: .72rem; padding: 5px 12px; border-radius: 6px;
+    cursor: pointer; font-family: inherit;
+    transition: background .15s;
+  }
+  .logout-btn:hover { background: rgba(255,255,255,.10); }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 220px 1fr 320px;
+    min-height: calc(100vh - 60px);
+  }
+  /* toggle do painel direito (stocks + noticias) */
+  body.right-off .layout { grid-template-columns: 220px 1fr; }
+  body.right-off aside.right { display: none; }
+  #rightHandle {
+    position: fixed; top: 78px; right: 320px; z-index: 60;
+    background: var(--black); color: #fff; border: none; cursor: pointer;
+    border-radius: 8px 0 0 8px; padding: 14px 6px; font-size: .62rem; font-weight: 800;
+    letter-spacing: .6px; writing-mode: vertical-rl; text-orientation: mixed;
+    box-shadow: -2px 2px 10px rgba(0,0,0,.18); transition: right .15s, background .15s;
+  }
+  #rightHandle:hover { background: var(--orange-dark); }
+  body.right-off #rightHandle { right: 0; }
+  @media (max-width: 1200px) { #rightHandle { display: none; } }
+  /* toggle do menu esquerdo (navegacao) */
+  body.left-off .layout { grid-template-columns: 1fr 320px; }
+  body.left-off.right-off .layout { grid-template-columns: 1fr; }
+  body.left-off aside.nav { display: none; }
+  #leftHandle {
+    position: fixed; top: 78px; left: 220px; z-index: 60;
+    background: var(--black); color: #fff; border: none; cursor: pointer;
+    border-radius: 0 8px 8px 0; padding: 14px 6px; font-size: .62rem; font-weight: 800;
+    letter-spacing: .6px; writing-mode: vertical-rl; text-orientation: mixed;
+    box-shadow: 2px 2px 10px rgba(0,0,0,.18); transition: left .15s, background .15s;
+  }
+  #leftHandle:hover { background: var(--orange-dark); }
+  body.left-off #leftHandle { left: 0; }
+  @media (max-width: 800px) { #leftHandle { display: none; } }
+
+  aside.nav {
+    background: #fff; border-right: 1px solid var(--border);
+    padding: 18px 0; overflow-y: auto;
+    position: sticky; top: 0; height: calc(100vh - 60px);
+  }
+  .nav-section {
+    font-size: .68rem; font-weight: 700; text-transform: uppercase;
+    color: var(--text-muted); letter-spacing: .6px;
+    padding: 16px 22px 6px;
+  }
+  .nav-section:first-child { padding-top: 0; }
+  .nav-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 22px; font-size: .87rem; color: var(--text);
+    cursor: pointer; border-left: 3px solid transparent;
+    transition: background .12s, border-color .12s, color .12s;
+  }
+  .nav-item:hover { background: var(--gray-50); }
+  .nav-item.active {
+    background: #fff7f0; color: var(--orange);
+    border-left-color: var(--orange); font-weight: 600;
+  }
+  .soon-tag {
+    font-size: .6rem; font-weight: 700; text-transform: uppercase;
+    background: var(--gray-100); color: var(--text-muted);
+    padding: 2px 6px; border-radius: 4px; letter-spacing: .3px;
+  }
+
+  main { padding: 0; overflow-y: auto; min-height: calc(100vh - 60px); }
+  .page-pad { padding: 28px 36px; }
+  .crumbs { font-size: .8rem; color: var(--text-muted); margin-bottom: 10px; }
+  .crumbs span { margin: 0 6px; color: var(--gray-300); }
+  .crumbs .current { color: var(--text); font-weight: 600; }
+  .page-head { margin-bottom: 22px; }
+  .page-head h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 6px; }
+  .page-head p { font-size: .92rem; color: var(--text-muted); }
+
+  .section { display: none; }
+  .section.active { display: block; }
+  .section.embed { padding: 0; }
+
+  .placeholder {
+    background: #fff; border: 1px dashed var(--gray-300);
+    border-radius: 14px; padding: 48px 36px;
+    text-align: center; box-shadow: var(--shadow);
+    max-width: 680px; margin: 18px auto 0;
+  }
+  .placeholder .icon { font-size: 2.4rem; margin-bottom: 12px; }
+  .placeholder h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 8px; }
+  .placeholder p { color: var(--text-muted); font-size: .9rem; line-height: 1.6; max-width: 460px; margin: 0 auto 16px; }
+  .placeholder .badge {
+    display: inline-block; padding: 4px 12px;
+    background: var(--yellow); color: var(--black);
+    font-size: .7rem; font-weight: 700; letter-spacing: .4px;
+    border-radius: 20px; text-transform: uppercase;
+  }
+  .placeholder ul {
+    text-align: left; max-width: 440px; margin: 16px auto 0;
+    list-style: none; font-size: .86rem; color: var(--text);
+  }
+  .placeholder ul li {
+    padding: 8px 0; border-bottom: 1px solid var(--gray-100);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .placeholder ul li:last-child { border-bottom: none; }
+  .placeholder ul li::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--orange); flex-shrink: 0;
+  }
+
+  .grid-cards {
+    display: grid; gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    margin-top: 18px;
+  }
+  .seg-card {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; cursor: pointer;
+    transition: transform .15s, box-shadow .15s, border-color .15s;
+  }
+  .seg-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(0,0,0,.08);
+    border-color: var(--orange);
+  }
+  .seg-card .seg-tag {
+    display: inline-block; padding: 3px 10px;
+    background: var(--gray-100); color: var(--text-muted);
+    font-size: .66rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .4px; border-radius: 6px; margin-bottom: 10px;
+  }
+  .seg-card.rental .seg-tag { background: #fff0e6; color: var(--orange); }
+  .seg-card.rumo .seg-tag { background: #fffbe0; color: #997000; }
+  .seg-card.news .seg-tag { background: var(--green-bg); color: var(--green); }
+  .seg-card h4 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+  .seg-card p { font-size: .8rem; color: var(--text-muted); line-height: 1.5; }
+  .seg-card .seg-status {
+    display: inline-block; margin-top: 10px;
+    font-size: .7rem; font-weight: 600; color: var(--text-muted);
+  }
+  .seg-card.live .seg-status { color: var(--green); }
+  .seg-card.live .seg-status::before { content: "\25CF "; }
+
+  .embed-frame {
+    width: 100%;
+    height: calc(100vh - 60px);
+    border: none; display: block; background: #fff;
+  }
+  .embed-loading {
+    display: flex; align-items: center; justify-content: center;
+    height: calc(100vh - 60px); color: var(--text-muted);
+    font-size: .9rem;
+  }
+  .embed-loading::before {
+    content: ""; width: 18px; height: 18px;
+    border: 2px solid var(--gray-200); border-top-color: var(--orange);
+    border-radius: 50%; margin-right: 10px;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* PAINEL DIREITO em 2 metades */
+  aside.right {
+    background: #fff; border-left: 1px solid var(--border);
+    position: sticky; top: 0; height: calc(100vh - 60px);
+    display: flex; flex-direction: column;
+  }
+  .right-half {
+    flex: 1 1 50%;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .right-half + .right-half {
+    border-top: 2px solid var(--border);
+  }
+  .panel-block {
+    padding: 12px 18px 8px;
+    background: #fff; position: sticky; top: 0;
+    border-bottom: 1px solid var(--gray-100);
+    z-index: 2;
+  }
+  .panel-title {
+    font-size: .7rem; font-weight: 800; text-transform: uppercase;
+    color: var(--text); letter-spacing: .8px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-title .sub {
+    font-size: .62rem; font-weight: 500;
+    color: var(--text-muted); text-transform: none; letter-spacing: 0;
+  }
+
+  /* STOCKS rows */
+  .sector-head {
+    font-size: .62rem; font-weight: 700; text-transform: uppercase;
+    color: var(--text-muted); letter-spacing: .5px;
+    padding: 10px 18px 4px;
+    background: linear-gradient(to right, var(--gray-50), transparent);
+  }
+  .stock-row {
+    display: grid; grid-template-columns: auto 1fr;
+    gap: 3px 10px; padding: 6px 18px 7px;
+    border-bottom: 1px solid var(--gray-100);
+    cursor: pointer;
+    transition: background .12s;
+  }
+  .stock-row:hover { background: var(--gray-50); }
+  .stock-left { font-weight: 700; font-size: .82rem; color: var(--text); }
+  .stock-right { text-align: right; font-size: .82rem; }
+  .stock-price { font-weight: 600; color: var(--text); }
+  .stock-chg { font-size: .72rem; margin-left: 4px; font-weight: 600; }
+  .stock-chg.up { color: var(--green); }
+  .stock-chg.down { color: var(--red); }
+  .stock-mult {
+    grid-column: 1 / -1;
+    font-size: .66rem; color: var(--text-muted);
+    display: flex; gap: 6px 14px; padding-top: 1px; flex-wrap: wrap;
+  }
+  .stock-mult span b { color: var(--text); font-weight: 600; margin-left: 2px; }
+  .stock-mult .yr { font-size: .5rem; color: var(--text-muted); font-weight: 700; vertical-align: super; margin-left: 1px; }
+
+  /* NEWS */
+  .news-item {
+    padding: 10px 18px; border-bottom: 1px solid var(--gray-100);
+    cursor: pointer; transition: background .12s;
+  }
+  .news-item:hover { background: var(--gray-50); }
+  .news-item:last-child { border-bottom: none; }
+  .news-meta {
+    font-size: .62rem; color: var(--text-muted); text-transform: uppercase;
+    letter-spacing: .4px; margin-bottom: 3px;
+    display: flex; gap: 6px; align-items: center;
+  }
+  .news-tag {
+    background: var(--gray-100); color: var(--text-muted);
+    padding: 1px 6px; border-radius: 4px; font-weight: 700;
+  }
+  .news-tag.rental { background: #fff0e6; color: var(--orange); }
+  .news-tag.rumo   { background: #fffbe0; color: #997000; }
+  .news-tag.macro  { background: var(--green-bg); color: var(--green); }
+  .news-tag.aviacao{ background: #e8f0ff; color: #1f4ea0; }
+  .news-tag.auto   { background: #f3eaff; color: #5a2c8c; }
+  .news-title { font-size: .82rem; line-height: 1.35; color: var(--text); }
+
+  /* HOVER POPUP por acao */
+  .stock-popup {
+    position: fixed; z-index: 9000;
+    background: #fff; border: 1px solid var(--gray-200);
+    border-radius: 12px; box-shadow: 0 12px 30px rgba(0,0,0,.16);
+    width: 320px; padding: 14px 16px 16px;
+    display: none;
+    font-family: inherit;
+  }
+  .stock-popup.show { display: block; }
+  .popup-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .popup-ticker { font-size: 1rem; font-weight: 800; color: var(--text); }
+  .popup-name { font-size: .72rem; color: var(--text-muted); }
+  .popup-price-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+  .popup-price { font-size: 1.05rem; font-weight: 700; }
+  .popup-chg { font-size: .82rem; font-weight: 700; }
+  .popup-chg.up { color: var(--green); }
+  .popup-chg.down { color: var(--red); }
+
+  .popup-rec {
+    display: inline-block; padding: 4px 10px; border-radius: 6px;
+    font-size: .7rem; font-weight: 700; letter-spacing: .3px;
+    text-transform: uppercase; margin-bottom: 12px;
+  }
+  .popup-rec.buy   { background: var(--green-bg); color: var(--green); }
+  .popup-rec.hold  { background: #fff3e0; color: #b66a00; }
+  .popup-rec.sell  { background: var(--red-bg); color: var(--red); }
+  .popup-rec .target {
+    margin-left: 8px; color: var(--text); font-weight: 600;
+    text-transform: none; letter-spacing: 0;
+  }
+  .popup-section {
+    font-size: .62rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: .5px; color: var(--text-muted);
+    border-top: 1px solid var(--gray-100); padding-top: 10px; margin-top: 6px; margin-bottom: 6px;
+  }
+  .popup-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 6px 14px; margin-bottom: 4px;
+  }
+  .popup-cell { font-size: .74rem; color: var(--text-muted); }
+  .popup-cell b { display: block; color: var(--text); font-size: .9rem; font-weight: 700; margin-top: 1px; }
+  .popup-note { font-size: .76rem; color: var(--text); line-height: 1.4; padding: 6px 0 4px; }
+  .popup-chart-wrap { margin-top: 2px; }
+  .popup-chart-wrap svg { display: block; width: 100%; height: auto; }
+  .popup-legend {
+    display: flex; gap: 12px; justify-content: center;
+    font-size: .68rem; color: var(--text-muted); margin-top: 4px;
+  }
+  .popup-legend .swatch { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 4px; }
+
+  footer {
+    text-align: center; padding: 16px;
+    font-size: .7rem; color: var(--text-muted);
+    border-top: 1px solid var(--border); margin-top: 30px;
+  }
+
+  @media (max-width: 1200px) {
+    .layout { grid-template-columns: 220px 1fr; }
+    aside.right { display: none; }
+    .stock-popup { display: none !important; }
+  }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; }
+    aside.nav { display: none; }
+    .page-pad { padding: 22px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<script>
+  const SUPABASE_URL  = "https://guzoripmdqclgxrllfvj.supabase.co";
+  const SUPABASE_ANON = "sb_publishable_rN8qCD-VFePFYx9yqtswGg_Rc1DWQgR";
+</script>
+
+<div id="gate" style="
+  position:fixed;inset:0;z-index:9999;background:#000;
+  display:none;align-items:center;justify-content:center;
+  font-family:'Segoe UI',Arial,sans-serif;
+">
+  <div style="
+    background:#1a1a1a;border-radius:16px;padding:48px 40px;
+    width:100%;max-width:380px;box-shadow:0 8px 40px rgba(0,0,0,.6);
+    border:1px solid #2a2a2a;text-align:center;
+  ">
+    <div style="font-size:2rem;margin-bottom:8px">&#128642;</div>
+    <h2 style="color:#fff;font-size:1.2rem;font-weight:700;margin-bottom:4px">Transportation &amp; Capital Goods</h2>
+    <p style="color:#888;font-size:.8rem;margin-bottom:32px">Hub Central</p>
+    <input id="email" type="text" placeholder="Usuario" autocomplete="username" autocapitalize="none" spellcheck="false"
+      style="width:100%;padding:12px 16px;border-radius:8px;border:1.5px solid #333;background:#111;color:#fff;font-size:.95rem;outline:none;margin-bottom:10px;transition:border .2s;"
+      onfocus="this.style.borderColor='#FF6200'" onblur="this.style.borderColor='#333'" />
+    <input id="pwd" type="password" placeholder="Senha" autocomplete="current-password"
+      style="width:100%;padding:12px 16px;border-radius:8px;border:1.5px solid #333;background:#111;color:#fff;font-size:.95rem;outline:none;margin-bottom:12px;transition:border .2s;"
+      onkeydown="if(event.key==='Enter')doLogin()"
+      onfocus="this.style.borderColor='#FF6200'" onblur="this.style.borderColor='#333'" />
+    <div id="gate-err" style="color:#e63946;font-size:.78rem;margin-bottom:10px;min-height:18px"></div>
+    <button id="gate-btn" onclick="doLogin()"
+      style="width:100%;padding:12px;border-radius:8px;border:none;background:#FF6200;color:#fff;font-size:.95rem;font-weight:700;cursor:pointer;transition:background .2s;"
+      onmouseover="this.style.background='#d75300'" onmouseout="this.style.background='#FF6200'">Entrar</button>
+  </div>
+</div>
+
+<div id="app" style="display:block">
+
+<script>
+  // ===== PREVIEW LOCAL: login desativado (no hub de verdade, mantenha o Supabase) =====
+  function doLogin(){ showApp(); }
+  function doLogout(){ location.reload(); }
+  function showApp(){
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+  }
+  showApp();
+</script>
+
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-mark">i</div>
+    <div class="logo-text">Transportation &amp; Capital Goods Hub</div>
+  </div>
+  <div class="topbar-right">
+    <button class="logout-btn" onclick="doLogout()">Sair</button>
+  </div>
+</div>
+
+<!-- abinhas pra mostrar/ocultar menu (esq) e painel (dir) -->
+<button id="leftHandle" onclick="toggleLeft()" title="Mostrar/ocultar menu"></button>
+<button id="rightHandle" onclick="toggleRight()" title="Mostrar/ocultar painel (stocks + noticias)"></button>
+<script>
+  function _setR(off){ document.getElementById('rightHandle').textContent = off ? '❮ painel' : 'painel ❯'; }
+  function _setL(off){ document.getElementById('leftHandle').textContent = off ? 'menu ❯' : '❮ menu'; }
+  function toggleRight(){
+    const off = document.body.classList.toggle('right-off');
+    try { localStorage.setItem('hubRightOff', off ? '1' : '0'); } catch(e){}
+    _setR(off);
+  }
+  function toggleLeft(){
+    const off = document.body.classList.toggle('left-off');
+    try { localStorage.setItem('hubLeftOff', off ? '1' : '0'); } catch(e){}
+    _setL(off);
+  }
+  (function(){
+    let r = false, l = false;
+    try { r = localStorage.getItem('hubRightOff') === '1'; l = localStorage.getItem('hubLeftOff') === '1'; } catch(e){}
+    if (r) document.body.classList.add('right-off');
+    if (l) document.body.classList.add('left-off');
+    _setR(r); _setL(l);
+  })();
+</script>
+
+<div class="layout">
+
+  <aside class="nav">
+    <div class="nav-section">Inicio</div>
+    <div class="nav-item active" data-section="home"><span>Visao Geral</span></div>
+
+    <div class="nav-section">Rental</div>
+    <div class="nav-item" data-section="fenabrave" data-embed="https://ibbatcg-rgb.github.io/dashboard-fenabrave/"><span>Fenabrave</span></div>
+    <div class="nav-item" data-section="fipe" data-embed="fipe.html"><span>FIPE</span></div>
+    <div class="nav-item" data-section="cheatsheet" data-embed="cheat-sheet.html"><span>Cheat Sheet</span></div>
+    <div class="nav-item" data-section="credito-bc" data-embed="credito-bc.html"><span>Crédito BC (Auto)</span></div>
+
+    <div class="nav-section">News</div>
+    <div class="nav-item" data-section="news-feed" data-embed="https://ibbatcg-rgb.github.io/transcap-news/?embed=1"><span>Feed</span></div>
+
+    <div class="nav-section">Em breve</div>
+    <div class="nav-item" data-section="seminovos"><span>Seminovos X-Ray</span><span class="soon-tag">Em breve</span></div>
+  </aside>
+
+  <main>
+    <div class="section active" id="sec-home">
+      <div class="page-pad">
+        <div class="crumbs"><span class="current">Visao Geral</span></div>
+        <div class="page-head">
+          <h1>Transportation &amp; Capital Goods Hub</h1>
+          <p>Painel central &middot; rental, logistica, aviacao, auto parts e capital goods. <em>Passe o mouse em qualquer ticker da direita pra ver detalhes.</em></p>
+        </div>
+
+        <div class="grid-cards">
+          <div class="seg-card rental live" onclick="showSection('fenabrave')">
+            <div class="seg-tag">Rental</div>
+            <h4>Fenabrave</h4>
+            <p>Emplacamentos mensais, marcas, chineses e eletrificados.</p>
+            <span class="seg-status">No ar</span>
+          </div>
+          <div class="seg-card rental" onclick="showSection('seminovos')">
+            <div class="seg-tag">Rental</div>
+            <h4>Seminovos X-Ray</h4>
+            <p>Diagnostico do mercado de usados.</p>
+            <span class="seg-status">Em construcao</span>
+          </div>
+          <div class="seg-card rental live" onclick="showSection('fipe')">
+            <div class="seg-tag">Rental</div>
+            <h4>FIPE</h4>
+            <p>Depreciacao e spread novo vs seminovo &middot; Top 50.</p>
+            <span class="seg-status">No ar</span>
+          </div>
+          <div class="seg-card rental live" onclick="showSection('cheatsheet')">
+            <div class="seg-tag">Rental</div>
+            <h4>Cheat Sheet</h4>
+            <p>Resumo em graficos &middot; Localiza, Movida, Unidas, LM.</p>
+            <span class="seg-status">No ar</span>
+          </div>
+          <div class="seg-card rental live" onclick="showSection('credito-bc')">
+            <div class="seg-tag">Rental</div>
+            <h4>Crédito BC (Auto)</h4>
+            <p>Saldo, concessoes, juros e inadimplencia &middot; PF e PJ.</p>
+            <span class="seg-status">No ar</span>
+          </div>
+          <div class="seg-card news live" onclick="showSection('news-feed')">
+            <div class="seg-tag">News</div>
+            <h4>TransCap News</h4>
+            <p>Curadoria de noticias por setor (Rental, Concessoes, Airlines, Cap Goods).</p>
+            <span class="seg-status">No ar</span>
+          </div>
+        </div>
+
+        <footer>Transportation &amp; Capital Goods Hub &middot; <span id="year"></span></footer>
+      </div>
+    </div>
+
+    <div class="section embed" id="sec-fenabrave">
+      <div class="embed-loading" id="loading-fenabrave">Carregando dashboard Fenabrave...</div>
+      <iframe class="embed-frame" id="frame-fenabrave" style="display:none" onload="onEmbedLoaded('fenabrave')"></iframe>
+    </div>
+
+    <div class="section" id="sec-seminovos">
+      <div class="page-pad">
+        <div class="crumbs">Rental <span>&rsaquo;</span> <span class="current">Seminovos X-Ray</span></div>
+        <div class="page-head"><h1>Seminovos X-Ray</h1><p>Diagnostico do mercado de usados.</p></div>
+        <div class="placeholder">
+          <div class="icon">&#128301;</div><span class="badge">Em construcao</span>
+          <h3 style="margin-top:14px">Seminovos X-Ray</h3>
+          <p>Modulo para consolidar o mercado de seminovos com cortes por marca, modelo, faixa de preco e idade.</p>
+          <ul>
+            <li>Volume e mix por canal (varejo, atacado, locadora)</li>
+            <li>Tempo medio de estoque e velocidade de giro</li>
+            <li>Precificacao vs. FIPE e desvio por categoria</li>
+            <li>Heatmap de regioes com maior liquidez</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="section embed" id="sec-fipe">
+      <div class="embed-loading" id="loading-fipe">Carregando FIPE...</div>
+      <iframe class="embed-frame" id="frame-fipe" style="display:none" onload="onEmbedLoaded('fipe')"></iframe>
+    </div>
+
+    <div class="section embed" id="sec-cheatsheet">
+      <div class="embed-loading" id="loading-cheatsheet">Carregando Cheat Sheet...</div>
+      <iframe class="embed-frame" id="frame-cheatsheet" style="display:none" onload="onEmbedLoaded('cheatsheet')"></iframe>
+    </div>
+
+    <div class="section embed" id="sec-credito-bc">
+      <div class="embed-loading" id="loading-credito-bc">Carregando Crédito BC...</div>
+      <iframe class="embed-frame" id="frame-credito-bc" style="display:none" onload="onEmbedLoaded('credito-bc')"></iframe>
+    </div>
+
+    <div class="section embed" id="sec-news-feed">
+      <div class="embed-loading" id="loading-news-feed">Carregando TransCap News...</div>
+      <iframe class="embed-frame" id="frame-news-feed" style="display:none" onload="onEmbedLoaded('news-feed')"></iframe>
+    </div>
+
+  </main>
+
+  <!-- PAINEL DIREITO em 2 metades -->
+  <aside class="right">
+    <div class="right-half">
+      <div class="panel-block">
+        <div class="panel-title">
+          <span>Stocks</span>
+          <span class="sub">P/E · EV/EBITDA · 2026 / 2027E</span>
+        </div>
+      </div>
+      <div id="stocks-list"></div>
+    </div>
+
+    <div class="right-half">
+      <div class="panel-block">
+        <div class="panel-title">
+          <span>Ultimas Noticias</span>
+          <span class="sub">setores &middot; últimas 24h</span>
+        </div>
+      </div>
+      <div id="news-list"></div>
+    </div>
+  </aside>
+
+</div>
+
+<!-- Popup flutuante reutilizavel -->
+<div id="stock-popup" class="stock-popup"></div>
+
+<script>
+  // ============================================================
+  // STOCKS - editar precos, multiplos, recomendacao, target, nota
+  // chg = variacao do dia (%)
+  // pe / ev_ebitda = multiplos LTM
+  // rec = "buy" | "hold" | "sell"
+  // target = preco-alvo (mesma moeda que price)
+  // note = uma linha com a estimativa principal
+  // ============================================================
+  // STOCKS agora vem de acoes.js (fundamentos) + precos.js (cotacao). Multiplos
+  // sao calculados em renderStocks(). Sem target/nota/recomendacao.
+
+  // ============================================================
+  // NOTICIAS - vem do news.json do TransCap News (auto refresh)
+  // URL do JSON publico:
+  const NEWS_URL = "https://ibbatcg-rgb.github.io/transcap-news/news.json";
+  // Mapeamento de setor -> tag visual no painel
+  const SECTOR_TAG_MAP = {
+    rental: "rental",
+    concessions: "rumo",
+    airlines: "aviacao",
+    capgoods: "auto",
+    other: "macro"
+  };
+  let NEWS = []; // populado por fetchNews()
+  let newsLoaded = false;
+  const JANELA_NOTICIAS_MS = 24 * 60 * 60 * 1000; // ultimas 24h
+  const SECTOR_LABEL = { rental:"Rental", concessions:"Concessões", airlines:"Airlines", capgoods:"Cap Goods" };
+  function sectorChip(id){
+    const s = (typeof SECTORS !== "undefined") ? SECTORS.find(x => x.id === id) : null;
+    const cor = s ? s.color : "#888";
+    return '<span class="news-tag" style="background:'+cor+'22;color:'+cor+';font-weight:700">'+(SECTOR_LABEL[id]||id)+'</span>';
+  }
+
+  function timeAgo(ms){
+    if(!ms) return "";
+    const diff = (Date.now() - ms) / 60000;
+    if(diff < 1) return "Agora";
+    if(diff < 60) return Math.round(diff) + " min";
+    if(diff < 1440) return Math.round(diff/60) + " h";
+    return new Date(ms).toLocaleDateString("pt-BR", {day: "2-digit", month: "2-digit"});
+  }
+
+  async function fetchNews(){
+    try {
+      const r = await fetch(NEWS_URL + "?t=" + Date.now(), { cache: "no-store" });
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      const j = await r.json();
+      // News estrutura comum: { rental:[...], concessions:[...], ... } ou array plano
+      let items = [];
+      if(Array.isArray(j)){
+        items = j;
+      } else if(j && typeof j === "object"){
+        Object.keys(j).forEach(k => {
+          if(Array.isArray(j[k])){
+            j[k].forEach(n => items.push({ ...n, _sector: k }));
+          }
+        });
+      }
+      // Campos reais do feed: published = Unix em SEGUNDOS; url em canonical/alternate; fonte em origin.title
+      const agora = Date.now();
+      const MAX = 20;
+      const limpaFonte = (t) => !t ? "Feed" : String(t).replace(/"/g, "").replace(/\s*-\s*Google Notícias/i, "").replace(/^site:.*/i, "Google").trim().slice(0, 22) || "Feed";
+      NEWS = items.map(n => {
+        const ms = (Number(n.published) || Number(n.updated) || 0) * 1000;
+        const secs = (typeof classifySectors === "function") ? classifySectors(n.title || "") : [];
+        return {
+          ms, secs,
+          fonte: limpaFonte(n.origin && n.origin.title),
+          time: timeAgo(ms),
+          title: n.title || "(sem titulo)",
+          url: (n.canonical && n.canonical[0] && n.canonical[0].href) || (n.alternate && n.alternate[0] && n.alternate[0].href) || null,
+        };
+      }).filter(n => n.ms && (agora - n.ms) <= JANELA_NOTICIAS_MS && n.secs.length > 0) // so classificadas em setor (sem "Outros")
+        .sort((a, b) => b.ms - a.ms)
+        .slice(0, MAX);
+      newsLoaded = true;
+      renderNews();
+    } catch(e){
+      console.warn("Falha ao buscar news.json:", e);
+      const el = document.getElementById("news-list");
+      if(el && !NEWS.length) {
+        el.innerHTML = '<div style="padding:18px;text-align:center;color:#888;font-size:.78rem;">Nao foi possivel carregar as noticias.<br><a href="https://ibbatcg-rgb.github.io/transcap-news/" target="_blank" style="color:#FF6200">Abrir TransCap News &rarr;</a></div>';
+      }
+    }
+  }
+
+  function fmtPrice(p, curr){
+    const sym = curr === "USD" ? "US$ " : "R$ ";
+    return sym + p.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtChg(c){
+    const sign = c >= 0 ? "+" : "";
+    return sign + c.toFixed(2).replace('.', ',') + "%";
+  }
+  function fmtMult(m){ return m.toFixed(1).replace('.', ',') + "x"; }
+
+  // multiplos 2026/2027 na linha (ex: "10,9 / 8,9x"); rotulo por ano completo vai no popup.
+  const dois = (a, b)=> {
+    const f = (x)=> x==null ? '—' : x.toFixed(1).replace('.', ',');
+    return f(a) + ' / ' + f(b) + 'x';
+  };
+  function multiplos(e, pr){
+    const preco = (pr && pr.preco != null) ? pr.preco : e.preco_ref;
+    const chg = (pr && pr.chg != null) ? pr.chg : 0;
+    const moeda = (pr && pr.moeda) || e.moeda;
+    const mcap = preco * e.acoes;                          // R$ mm
+    const ev = (e.divliq26 != null) ? mcap + e.divliq26 + (e.minor || 0) : null;
+    return {
+      preco, chg, moeda,
+      pe26: e.ll26 ? mcap / e.ll26 : null,
+      pe27: e.ll27 ? mcap / e.ll27 : null,
+      evb26: (ev != null && e.ebitda26) ? ev / e.ebitda26 : null,
+      evb27: (ev != null && e.ebitda27) ? ev / e.ebitda27 : null,
+    };
+  }
+  function renderStocks(){
+    const el = document.getElementById('stocks-list');
+    const A = window.ACOES;
+    if(!A){ el.innerHTML = '<div style="padding:18px;color:#888;font-size:.8rem;">acoes.js não carregou.</div>'; return; }
+    const PRECOS = (window.PRECOS && window.PRECOS.precos) || {};
+    let html = "";
+    A.setores.forEach(setor => {
+      const items = A.empresas.filter(e => e.setor === setor);
+      if(!items.length) return;
+      html += '<div class="sector-head">' + setor + '</div>';
+      items.forEach(e => {
+        const m = multiplos(e, PRECOS[e.ticker]);
+        const upDown = m.chg >= 0 ? "up" : "down";
+        html +=
+          '<div class="stock-row" data-ticker="' + e.ticker + '">' +
+            '<div class="stock-left">' + e.ticker + '</div>' +
+            '<div class="stock-right">' +
+              '<span class="stock-price">' + fmtPrice(m.preco, m.moeda === 'USD' ? 'USD' : 'BRL') + '</span>' +
+              '<span class="stock-chg ' + upDown + '">' + fmtChg(m.chg) + '</span>' +
+            '</div>' +
+            '<div class="stock-mult">' +
+              '<span>P/E <b>' + dois(m.pe26, m.pe27) + '</b></span>' +
+              '<span>EV/EBITDA <b>' + dois(m.evb26, m.evb27) + '</b></span>' +
+            '</div>' +
+          '</div>';
+      });
+    });
+    el.innerHTML = html;
+    el.querySelectorAll('.stock-row').forEach(row => {
+      const e = A.empresas.find(x => x.ticker === row.dataset.ticker);
+      row.addEventListener('mouseenter', () => showPopup(row, e));
+      row.addEventListener('mouseleave', () => hidePopupSoon());
+    });
+  }
+
+  function renderNews(){
+    const el = document.getElementById('news-list');
+    if(!NEWS.length){
+      el.innerHTML = newsLoaded
+        ? '<div style="padding:18px;text-align:center;color:#888;font-size:.78rem;">Sem notícias nas últimas 24h.<br><a href="https://ibbatcg-rgb.github.io/transcap-news/" target="_blank" style="color:#FF6200">Ver feed completo &rarr;</a></div>'
+        : '<div style="padding:18px;text-align:center;color:#888;font-size:.8rem;">Carregando noticias...</div>';
+      return;
+    }
+    el.innerHTML = NEWS.map(n => {
+      const openAttr = n.url ? ' onclick="window.open(\'' + n.url.replace(/'/g, "\\'") + '\',\'_blank\')" style="cursor:pointer"' : '';
+      return '<div class="news-item"' + openAttr + '>' +
+        '<div class="news-meta">' +
+          sectorChip(n.secs[0]) +
+          '<span>' + n.fonte + ' &middot; ' + n.time + '</span>' +
+        '</div>' +
+        '<div class="news-title">' + n.title + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // ============================================================
+  // POPUP DE DETALHES POR ACAO
+  // ============================================================
+  let popupHideTimer = null;
+  const popupEl = document.getElementById('stock-popup');
+  popupEl.addEventListener('mouseenter', () => { if(popupHideTimer){ clearTimeout(popupHideTimer); popupHideTimer = null; } });
+  popupEl.addEventListener('mouseleave', () => hidePopupSoon());
+  function hidePopupSoon(){
+    if(popupHideTimer) clearTimeout(popupHideTimer);
+    popupHideTimer = setTimeout(() => { popupEl.classList.remove('show'); }, 120);
+  }
+
+  function seedOf(str){ let s = 0; for(let i=0;i<str.length;i++) s = (s * 31 + str.charCodeAt(i)) >>> 0; return s; }
+  function pseudoRandom(seed){
+    return function(){
+      seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function genSeries(ticker, vol, drift){
+    const rnd = pseudoRandom(seedOf(ticker));
+    const arr = [100]; let v = 100;
+    for(let i=0;i<11;i++){
+      const r = (rnd() - 0.5) * 2 * vol + drift;
+      v = v * (1 + r); arr.push(v);
+    }
+    return arr;
+  }
+  const IBOV_12M = genSeries("IBOVIBOV", 0.03, 0.005);
+
+  function buildSVGChart(stockSeries, ibovSeries){
+    const w = 288, h = 110, pad = 6;
+    const all = stockSeries.concat(ibovSeries);
+    const min = Math.min.apply(null, all) * 0.99;
+    const max = Math.max.apply(null, all) * 1.01;
+    const xs = (i, n) => pad + (i / (n - 1)) * (w - 2*pad);
+    const ys = v => pad + (1 - (v - min) / (max - min)) * (h - 2*pad);
+    function path(series, color, dash){
+      const d = series.map((v, i) => (i === 0 ? 'M' : 'L') + ' ' + xs(i, series.length).toFixed(1) + ' ' + ys(v).toFixed(1)).join(' ');
+      return '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-width="' + (dash?1.4:2) + '" ' + (dash?'stroke-dasharray="4,3"':'') + ' stroke-linejoin="round" stroke-linecap="round"/>';
+    }
+    const y100 = ys(100);
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" xmlns="http://www.w3.org/2000/svg">' +
+      '<line x1="' + pad + '" y1="' + y100.toFixed(1) + '" x2="' + (w-pad) + '" y2="' + y100.toFixed(1) + '" stroke="#e5e5e5" stroke-width="1" stroke-dasharray="2,3"/>' +
+      path(ibovSeries, "#999", true) +
+      path(stockSeries, "#FF6200", false) +
+    '</svg>';
+  }
+
+  function showPopup(rowEl, e){
+    if(!e){ return; }
+    if(popupHideTimer){ clearTimeout(popupHideTimer); popupHideTimer = null; }
+    const PRECOS = (window.PRECOS && window.PRECOS.precos) || {};
+    const pr = PRECOS[e.ticker] || {};
+    const m = multiplos(e, pr);
+    const upDown = m.chg >= 0 ? 'up' : 'down';
+    const fx = (x)=> x==null ? '—' : x.toFixed(1).replace('.', ',') + 'x';
+    const ibov = (window.PRECOS && window.PRECOS.ibov) || [];
+    const stockSeries = pr.hist || [];
+    const temChart = stockSeries.length > 1 && ibov.length > 1;
+    const retTxt = (serie)=> !serie.length ? '—' : ((serie.at(-1)-100>=0?'+':'') + (serie.at(-1)-100).toFixed(1).replace('.', ',') + '%');
+
+    popupEl.innerHTML =
+      '<div class="popup-head"><div>' +
+        '<div class="popup-ticker">' + e.ticker + '</div>' +
+        '<div class="popup-name">' + e.nome + '</div>' +
+      '</div></div>' +
+      '<div class="popup-price-row">' +
+        '<span class="popup-price">' + fmtPrice(m.preco, m.moeda === 'USD' ? 'USD' : 'BRL') + '</span>' +
+        '<span class="popup-chg ' + upDown + '">' + fmtChg(m.chg) + '</span>' +
+      '</div>' +
+      '<div class="popup-section">Múltiplos</div>' +
+      '<div class="popup-grid">' +
+        '<div class="popup-cell">P/E 2026E <b>' + fx(m.pe26) + '</b></div>' +
+        '<div class="popup-cell">P/E 2027E <b>' + fx(m.pe27) + '</b></div>' +
+        '<div class="popup-cell">EV/EBITDA 2026E <b>' + fx(m.evb26) + '</b></div>' +
+        '<div class="popup-cell">EV/EBITDA 2027E <b>' + fx(m.evb27) + '</b></div>' +
+      '</div>' +
+      '<div class="popup-section">Performance 12M vs IBOV</div>' +
+      (temChart
+        ? '<div class="popup-chart-wrap">' + buildSVGChart(stockSeries, ibov) + '</div>' +
+          '<div class="popup-legend">' +
+            '<span><span class="swatch" style="background:#FF6200"></span>' + e.ticker + ' ' + retTxt(stockSeries) + '</span>' +
+            '<span><span class="swatch" style="background:#999"></span>IBOV ' + retTxt(ibov) + '</span>' +
+          '</div>'
+        : '<div class="popup-note">Sem histórico disponível.</div>');
+    popupEl.classList.add('show');
+
+    const r = rowEl.getBoundingClientRect();
+    const popW = 320;
+    let left = r.left - popW - 12;
+    if(left < 12) left = 12;
+    let top = r.top - 8;
+    const popH = popupEl.offsetHeight || 360;
+    const vpH = window.innerHeight;
+    if(top + popH > vpH - 12) top = Math.max(12, vpH - popH - 12);
+    popupEl.style.left = left + 'px';
+    popupEl.style.top  = top  + 'px';
+  }
+
+  // ============================================================
+  // NAVEGACAO + LAZY EMBED
+  // ============================================================
+  const loadedFrames = new Set();
+  function showSection(id){
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('aside.nav .nav-item').forEach(n => n.classList.remove('active'));
+    const sec = document.getElementById('sec-' + id);
+    if(sec) sec.classList.add('active');
+    const nav = document.querySelector('aside.nav .nav-item[data-section="' + id + '"]');
+    if(nav) nav.classList.add('active');
+    const embedUrl = nav && nav.dataset.embed;
+    if(embedUrl && !loadedFrames.has(id)){
+      const frame = document.getElementById('frame-' + id);
+      if(frame){ frame.src = embedUrl; loadedFrames.add(id); }
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  function onEmbedLoaded(id){
+    const frame = document.getElementById('frame-' + id);
+    const loading = document.getElementById('loading-' + id);
+    try {
+      const doc = frame.contentDocument || frame.contentWindow.document;
+      if(doc){
+        const gate = doc.getElementById('gate');
+        if(gate) gate.style.display = 'none';
+        const app = doc.getElementById('app');
+        if(app) app.style.display = 'block';
+        const hdr = doc.querySelector('header');
+        if(hdr) hdr.style.display = 'none';
+        const ft = doc.querySelector('footer');
+        if(ft) ft.style.display = 'none';
+        // News (TransCap): esconde o "Gerar Digest" e os checkboxes de digest — nao e o intuito no hub.
+        if(id === 'news-feed' && !doc.getElementById('hub-hide-digest')){
+          const st = doc.createElement('style');
+          st.id = 'hub-hide-digest';
+          st.textContent = '#digest-btn, .digest-checkbox, .news-item.digest-selected{background:inherit !important}#digest-btn,.digest-checkbox{display:none !important}';
+          doc.head.appendChild(st);
+        }
+      }
+    } catch(e){}
+    if(loading) loading.style.display = 'none';
+    frame.style.display = 'block';
+  }
+  document.querySelectorAll('aside.nav .nav-item[data-section]').forEach(el => {
+    el.addEventListener('click', () => showSection(el.dataset.section));
+  });
+  document.getElementById('year').textContent = new Date().getFullYear();
+  renderStocks();
+  fetchNews(); // busca news.json (renderiza ao terminar)
+  setInterval(fetchNews, 5 * 60 * 1000); // re-fetch a cada 5 min
+  showSection('fipe'); // PREVIEW: abre direto no FIPE pra ver a integracao
+</script>
+
+</div>
+</body>
+</html>
