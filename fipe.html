@@ -179,6 +179,16 @@
 
   <!-- ABA: FROTAS (Localiza x Movida) -->
   <div class="sec" id="sec-frotas">
+    <!-- ===== KILLER CHART: réplica do benchmark Localiza (2T24) ===== -->
+    <div class="card full" style="margin-top:16px;border:2px solid #1f9d55">
+      <h2 style="color:#1f9d55">📉 Killer chart — deterioração do valor residual (réplica Localiza 2T24)</h2>
+      <p>Deterioração do valor residual (gap vs 0 km) da frota Localiza desde jan/2023 — <span style="color:#1f9d55"><b>nosso (FIPE)</b></span> × <span style="color:#888"><b>Localiza reportado</b></span>. <b>Duas leituras</b>: <i>carteira de seminovos</i> (variação casada por ano-modelo, sem quebra de janeiro — bate os −11,2% deles) e <i>réplica fiel</i> (trava o trim básico). Alterne nos botões e monte a cesta abaixo.</p>
+      <div id="killerSel" style="margin:6px 0 12px"></div>
+      <div class="chartbox" style="height:400px"><canvas id="cKillerAcum"></canvas></div>
+      <p class="hint" id="killerNota" style="margin-top:8px;line-height:1.5"></p>
+      <div id="killerTabela" style="margin:12px 0 0;overflow-x:auto"></div>
+    </div>
+
     <p class="hint" style="margin:18px 0 0">Depreciação <b>restrita aos modelos que cada locadora mais roda</b> (frota típica). Fonte da frota: seminovos mais vendidos no site de cada uma.</p>
     <div class="controls">
       <div class="ctl"><label>Empresas</label>
@@ -491,7 +501,247 @@ function renderVisao() {
 
 // ---------- render: aba Frotas (Localiza x Movida) ----------
 const COR_EMP = { Localiza: "#1f9d55", Movida: "#FF6200" };
+
+// ===== KILLER CHART: réplica do benchmark Localiza (2T24) =====
+// Curva mensal reportada pela Localiza no release 2T24 (queda acumulada do
+// preço do carro básico 1/2/3 anos vs 0 km, indexada a jan/2023). 18 pts jan/23..jun/24.
+const LOC_ACUM = [0, -0.6, -1.1, -1.4, -1.8, -2.8, -3.8, -4.8, -5.7, -6.5, -7.4, -7.6, -8.8, -9.4, -9.3, -8.8, -10.7, -11.2];
+const LOC_ACUM_INI = "janeiro/2023";
+// medias de gap por fase reportadas pela Localiza: [pre, pandemia, pos]
+const LOC_FASES = { 1: [19.7, 18.1, 23.8], 2: [25.1, 23.9, 29.5], 3: [30.3, 28.2, 33.1] };
+const LOC_DELTA = { 1: 4.1, 2: 4.4, 3: 2.8 };
+const LBL_IDADE = { 1: "1 ano", 2: "2 anos", 3: "3 anos" };
+const FASES = [[2019, 2020], [2021, 2022], [2023, 2024]];
+const mesDeTab = (t) => MESES.find((m) => m.codigo_tabela === t)?.mes.trim();
+const anoDeTab = (t) => +mesDeTab(t).split("/")[1];
+const meanArr = (a) => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+// ----- DUAS leituras (fixo/var) + cesta configurável, recalculadas no front -----
+const K = D.frotas.killer;
+let killerMet = "var";               // default = cesta variável (idade real, o "primeiro gráfico")
+const KM = () => K[killerMet];        // estrutura da metodologia ativa
+const killerTemDado = (np) => { const M = KM(), o = killerMet === "var" ? M.varNp[np] : M.compNp[np]; return o && Object.keys(o).length > 0; };
+const killerQtd = (np) => { const m = KM().modelos.find((x) => x.np === np); return (m && m.qtd) || 1; };
+const killerPondera = () => killerMet === "var"; // var = pondera pelo volume do mix (frota RENT)
+const killerFrota = () => KM().modelos.map((m) => m.np).filter(killerTemDado); // frota completa c/ dado
+let killerSel = new Set(killerFrota()); // default = frota completa (mix RENT)
+// curva da cesta. FIXO: média do NÍVEL composto (acum DIRETO, corta em dez/25).
+// VAR: índice ENCADEADO da variação do gap CASADA POR ANO-MODELO (varNp já vem
+// casada por safra -> sem quebra de janeiro), ponderada pelo volume do mix.
+function killerComposto() {
+  const M = KM(), out = [];
+  if (killerMet === "var") {
+    let acc = 0;
+    for (let i = 0; i < K.tabs.length; i++) {
+      const tab = K.tabs[i];
+      if (i === 0) { out.push({ tab, mes: mesDeTab(tab), gap: 0, n: 0 }); continue; }
+      let sw = 0, sd = 0, n = 0;
+      for (const np of killerSel) { const v = M.varNp[np] ? M.varNp[np][tab] : null; if (v == null) continue; const w = killerQtd(np); sw += w; sd += w * v; n++; }
+      if (sw) acc += sd / sw;
+      out.push({ tab, mes: mesDeTab(tab), gap: acc * 100, n });
+    }
+    return out;
+  }
+  // FIXO: nível composto, acum direto; corta em dez/2025 (em 2026 sobra ~1 trim).
+  for (const tab of K.tabs.filter((t) => anoDeTab(t) <= 2025)) {
+    const vals = [];
+    for (const np of killerSel) { const v = M.compNp[np] ? M.compNp[np][tab] : null; if (v != null) vals.push(v); }
+    if (vals.length) out.push({ tab, mes: mesDeTab(tab), gap: meanArr(vals) * 100, n: vals.length });
+  }
+  return out;
+}
+// gap por idade (média ponderada pelo volume quando var) por mês -> tabela de fase
+function killerSerieIdade(idade) {
+  const M = KM(), out = [];
+  for (const tab of K.tabs) {
+    let sw = 0, sg = 0, n = 0;
+    for (const np of killerSel) { const g = M.gapNp[np] && M.gapNp[np][idade] ? M.gapNp[np][idade][tab] : null; if (g == null) continue; const w = killerPondera() ? killerQtd(np) : 1; sw += w; sg += w * g; n++; }
+    if (n) out.push({ tab, mes: mesDeTab(tab), ano: anoDeTab(tab), gap: sg / sw * 100, n });
+  }
+  return out;
+}
+// queda individual jan/23->jun/24. null = sem dado no período.
+function killerIndivDrop(np) {
+  const M = KM();
+  const i0 = K.tabs.findIndex((t) => mesDeTab(t) === "janeiro/2023"), i1 = K.tabs.findIndex((t) => mesDeTab(t) === "junho/2024");
+  if (i0 < 0 || i1 < 0) return null;
+  if (killerMet === "var") { const vm = M.varNp[np]; if (!vm) return null; let acc = 0, n = 0; for (let i = i0 + 1; i <= i1; i++) { const v = vm[K.tabs[i]]; if (v != null) { acc += v; n++; } } return n ? -(acc * 100) : null; }
+  const c = M.compNp[np]; if (!c) return null;
+  let acc = 0, prev = null, nok = 0;
+  for (const t of K.tabs.slice(i0, i1 + 1)) { const v = c[t]; if (v == null) continue; if (prev != null) { acc += v - prev; nok++; } prev = v; }
+  return nok > 0 ? -(acc * 100) : null;
+}
+// painel de seleção da cesta (presets + checkboxes por modelo, com a queda de cada um)
+function renderKillerSel() {
+  const cont = document.getElementById("killerSel"); if (!cont) return;
+  const bs = "padding:3px 9px;font-size:12px;border:1px solid #1f9d55;background:#fff;color:#1f9d55;border-radius:6px;cursor:pointer";
+  const bsOn = "padding:3px 11px;font-size:12px;border:1px solid #1f9d55;background:#1f9d55;color:#fff;border-radius:6px;cursor:pointer;font-weight:600";
+  const bsOff = "padding:3px 11px;font-size:12px;border:1px solid #bbb;background:#fff;color:#666;border-radius:6px;cursor:pointer";
+  // seletor de METODOLOGIA
+  const MET = [["var", "Carteira (casa por ano-modelo)"], ["fixo", "Réplica fiel (trava o trim básico)"]];
+  let h = '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px">';
+  h += '<span class="hint" style="margin-right:2px">Leitura:</span>';
+  for (const [k, lab] of MET) h += `<button data-met="${k}" style="${killerMet === k ? bsOn : bsOff}">${lab}</button>`;
+  h += '</div>';
+  // presets de CESTA
+  const PRE = [["frota", "Frota completa (mix RENT)"], ["ampla", "Econômicos"], ["bc", "Frota locação B/C"], ["piores", "Espelho Localiza"]];
+  h += '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:8px">';
+  h += '<span class="hint" style="margin-right:2px">Cesta (clique para montar):</span>';
+  for (const [k, lab] of PRE) h += `<button data-preset="${k}" style="${bs}">${lab}</button>`;
+  h += '</div><div style="display:flex;flex-wrap:wrap;gap:5px 14px">';
+  const mods = KM().modelos.filter((m) => killerTemDado(m.np)).sort((a, b) => (b.eco - a.eco) || ((killerIndivDrop(a.np) ?? 99) - (killerIndivDrop(b.np) ?? 99)));
+  for (const m of mods) {
+    const d = killerIndivDrop(m.np), dStr = d == null ? "—" : (d >= 0 ? "+" : "") + d.toFixed(1).replace(".", ",") + "pp";
+    const dCol = d == null ? "#aaa" : (d <= -4 ? "#c0392b" : "#888");
+    const tt = m.trim ? ` title="trim travado: ${m.trim}"` : "";
+    h += `<label${tt} style="display:inline-flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer${m.eco ? "" : ";opacity:.72"}">` +
+      `<input type="checkbox" data-np="${m.np}" ${killerSel.has(m.np) ? "checked" : ""}>` +
+      `<span>${m.np} <span style="color:${dCol}">${dStr}</span></span></label>`;
+  }
+  cont.innerHTML = h + "</div>";
+  cont.querySelectorAll("button[data-met]").forEach((b) => b.addEventListener("click", () => {
+    if (killerMet === b.dataset.met) return;
+    killerMet = b.dataset.met;
+    // var -> frota completa (mix RENT) | fixo -> econômicos (réplica do slide)
+    killerSel = new Set(killerMet === "var" ? killerFrota() : (KM().presets.ampla || []).filter(killerTemDado));
+    renderKillerSel(); renderKiller();
+  }));
+  cont.querySelectorAll("button[data-preset]").forEach((b) => b.addEventListener("click", () => {
+    const k = b.dataset.preset;
+    killerSel = new Set(k === "frota" ? killerFrota() : (KM().presets[k] || []).filter(killerTemDado)); renderKillerSel(); renderKiller();
+  }));
+  cont.querySelectorAll("input[data-np]").forEach((cb) => cb.addEventListener("change", () => {
+    if (cb.checked) killerSel.add(cb.dataset.np); else killerSel.delete(cb.dataset.np);
+    if (killerSel.size === 0) { killerSel.add(cb.dataset.np); cb.checked = true; return; } // não deixa vazio
+    renderKiller();
+  }));
+}
+function renderKiller() {
+  // --- tabela comparativa nosso x Localiza (gap por fase) ---
+  const fmt = (v) => v == null ? "—" : v.toFixed(1).replace(".", ",") + "%";
+  let h = `<table class="mod-tab"><thead><tr><th>Gap por fase</th><th>Pré '19-20</th><th>Pandemia</th><th>Pós '23-24</th><th>Δ 2019→2024</th></tr></thead><tbody>`;
+  for (const i of [1, 2, 3]) {
+    const s = killerSerieIdade(i);
+    const med = FASES.map((anos) => meanArr(s.filter((p) => anos.includes(p.ano)).map((p) => p.gap)));
+    const a19 = meanArr(s.filter((p) => p.ano === 2019).map((p) => p.gap)), a24 = meanArr(s.filter((p) => p.ano === 2024).map((p) => p.gap));
+    const dl = (a19 != null && a24 != null) ? a24 - a19 : null;
+    const loc = LOC_FASES[i];
+    h += `<tr><td><b>${LBL_IDADE[i]}</b></td>` +
+      `<td>${fmt(med[0])} <span class="hint">(Loc ${loc[0]}%)</span></td>` +
+      `<td>${fmt(med[1])} <span class="hint">(Loc ${loc[1]}%)</span></td>` +
+      `<td>${fmt(med[2])} <span class="hint">(Loc ${loc[2]}%)</span></td>` +
+      `<td><b style="color:#1f9d55">${dl == null ? "—" : (dl >= 0 ? "+" : "") + fmt(dl)}</b> <span class="hint">(Loc +${LOC_DELTA[i]}pp)</span></td></tr>`;
+  }
+  document.getElementById("killerTabela").innerHTML = h + "</tbody></table>";
+
+  // --- KILLER: acumulado desde jan/2023, com períodos e ponta marcada ---
+  const comp = killerComposto();
+  const iBase = comp.findIndex((p) => p.mes === LOC_ACUM_INI);
+  const win = iBase >= 0 ? comp.slice(iBase) : comp;
+  const base = win[0] ? win[0].gap : 0;
+  const labB = win.map((p) => { const [n, a] = p.mes.split("/"); return n.slice(0, 3) + "/" + a.slice(2); });
+  const ours = win.map((p) => +(-(p.gap - base)).toFixed(1)); // negativo = perdeu valor vs 0km
+  const ns = win.map((p) => p.n); // cobertura (modelos com o trim travado vivo no mês)
+  const loc = win.map((_, i) => i < LOC_ACUM.length ? LOC_ACUM[i] : null);
+  // períodos + depreciação média mensal de cada (slope do acumulado)
+  const findIdx = (mes) => win.findIndex((p) => p.mes === mes);
+  const lastMes = win.at(-1).mes;
+  const PER = [
+    { a: "janeiro/2023", b: "dezembro/2023" },
+    { a: "janeiro/2024", b: "dezembro/2024" },
+    { a: "janeiro/2025", b: "dezembro/2025" },
+    { a: "janeiro/2026", b: lastMes },
+  ].map((p) => { let ai = findIdx(p.a), bi = findIdx(p.b); if (ai < 0) ai = 0; if (bi < 0) bi = win.length - 1; const rate = bi > ai ? (ours[bi] - ours[ai]) / (bi - ai) : 0; return { ...p, ai, bi, rate }; }).filter((p) => p.bi > p.ai && p.ai < win.length - 1);
+  const iMP = findIdx("junho/2023"); // medida provisória
+  const iIPI = killerMet === "var" ? findIdx("agosto/2025") : -1; // IPI Verde (só na cesta variável)
+
+  const killerPlugin = {
+    id: "killerAnno",
+    afterDatasetsDraw(chart) {
+      const { ctx, chartArea, scales } = chart; const sx = scales.x, sy = scales.y;
+      ctx.save();
+      const y0 = sy.getPixelForValue(0);
+      ctx.strokeStyle = "#bbb"; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(chartArea.left, y0); ctx.lineTo(chartArea.right, y0); ctx.stroke(); ctx.setLineDash([]);
+      // marcador da medida provisória (jun/23)
+      if (iMP >= 0) {
+        const xm = sx.getPixelForValue(iMP);
+        ctx.strokeStyle = "#FF6200"; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(xm, chartArea.top); ctx.lineTo(xm, chartArea.bottom); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = "#FF6200"; ctx.font = "italic 8.5px Helvetica"; ctx.textAlign = "left"; ctx.fillText("Medida Provisória", xm + 3, chartArea.bottom - 4);
+      }
+      // marcador do IPI Verde (ago/23) — só na cesta variável; corte de IPI dos 1.0 fechou o gap
+      if (iIPI >= 0) {
+        const xi = sx.getPixelForValue(iIPI);
+        ctx.strokeStyle = "#185FA5"; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(xi, chartArea.top + 14); ctx.lineTo(xi, chartArea.bottom); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = "#185FA5"; ctx.font = "italic 8.5px Helvetica"; ctx.textAlign = "right"; ctx.fillText("IPI Verde (carro 1.0)", xi - 3, chartArea.top + 20);
+      }
+      // linhas delimitando os períodos usados no cálculo da taxa mensal
+      PER.forEach((p, k) => {
+        const xa = sx.getPixelForValue(p.ai), xb = sx.getPixelForValue(p.bi), xm = (xa + xb) / 2;
+        // linha de início do período (delimitador) — visível
+        ctx.strokeStyle = "#9a9a9a"; ctx.setLineDash([5, 4]); ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(xa, chartArea.top); ctx.lineTo(xa, chartArea.bottom); ctx.stroke();
+        if (k === PER.length - 1) { ctx.beginPath(); ctx.moveTo(xb, chartArea.top); ctx.lineTo(xb, chartArea.bottom); ctx.stroke(); } // fecha o último
+        ctx.setLineDash([]);
+        // taxa média mensal do período (centrada)
+        ctx.textAlign = "center";
+        ctx.fillStyle = p.rate <= 0 ? "#c0392b" : "#1f9d55"; ctx.font = "bold 10px Helvetica";
+        ctx.fillText((p.rate <= 0 ? "▼" : "▲") + Math.abs(p.rate).toFixed(1).replace(".", ",") + "%/m", xm, chartArea.top - 6);
+      });
+      // ponta: último ponto nosso
+      const li = ours.length - 1, px = sx.getPixelForValue(li), py = sy.getPixelForValue(ours[li]);
+      ctx.fillStyle = "#1f9d55"; ctx.beginPath(); ctx.arc(px, py, 4.5, 0, 2 * Math.PI); ctx.fill();
+      ctx.textAlign = "right"; ctx.font = "bold 12px Helvetica"; ctx.fillStyle = "#1f9d55";
+      ctx.fillText(`${ours[li] >= 0 ? "+" : ""}${ours[li].toFixed(1).replace(".", ",")}% hoje`, px - 7, py - 8);
+      ctx.restore();
+    },
+  };
+  if (charts.cKillerAcum) charts.cKillerAcum.destroy();
+  charts.cKillerAcum = new Chart(document.getElementById("cKillerAcum"), {
+    type: "line",
+    data: { labels: labB, datasets: [
+      { label: "Carro básico Localiza (nossa FIPE)", data: ours, borderColor: "#1f9d55", backgroundColor: "#1f9d55", borderWidth: 2.8, pointRadius: 0, tension: .25, spanGaps: true },
+      { label: "Localiza reportado (2T24)", data: loc, borderColor: "#888", backgroundColor: "#888", borderWidth: 2.4, borderDash: [6, 4], pointRadius: 0, tension: .25, spanGaps: true },
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, layout: { padding: { top: 22 } },
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { position: "bottom", labels: { color: CG.legend, boxWidth: 14, font: { size: 12 } } },
+        tooltip: { callbacks: {
+          label: (c) => `${c.dataset.label}: ${c.parsed.y == null ? "" : c.parsed.y.toFixed(1).replace(".", ",") + "%"}`,
+          afterBody: (items) => {
+            const it = items.find((x) => x.datasetIndex === 0); // nossa linha
+            if (!it) return "";
+            const i = it.dataIndex, d = it.dataset.data;
+            const cob = ns[i] != null ? `\nCobertura: ${ns[i]} modelo${ns[i] === 1 ? "" : "s"}${ns[i] <= 1 ? " ⚠" : ""}` : "";
+            if (i < 1 || d[i] == null || d[i - 1] == null) return cob.trim();
+            const mom = d[i] - d[i - 1];
+            return `Depreciação no mês: ${mom <= 0 ? "▼ " : "▲ "}${Math.abs(mom).toFixed(1).replace(".", ",")} p.p.${cob}`;
+          },
+        } },
+      },
+      scales: {
+        x: { ticks: { color: CG.tick, maxRotation: 60, autoSkip: true, maxTicksLimit: 14 }, grid: { color: CG.grid } },
+        y: { title: { display: true, text: "% vs jan/2023 (0 = base)", color: CG.tick }, ticks: { color: CG.tick, callback: (v) => v + "%" }, grid: { color: CG.grid } },
+      },
+    },
+    plugins: [killerPlugin],
+  });
+
+  const nossoJun24 = (ours[LOC_ACUM.length - 1]).toFixed(1).replace(".", ",");
+  const hojeV = ours.at(-1), hojeStr = (hojeV >= 0 ? "+" : "") + hojeV.toFixed(1).replace(".", ",") + "%";
+  const piorV = Math.min(...ours), piorStr = piorV.toFixed(1).replace(".", ",") + "%";
+  const nb = killerSel.size;
+  const nMin = Math.min(...ns.slice(findIdx("dezembro/2023") < 0 ? 0 : findIdx("dezembro/2023"))); // cobertura na 2ª metade
+  const notaFixo =
+    `<b>Leitura 1 — réplica fiel ("travando os modelos"):</b> para cada modelo, <b>trava-se o trim básico</b> (Onix Joy, Kwid Life, Argo 1.0…) e segue-se a depreciação dele vs 0&nbsp;km, acumulada desde jan/23 (idade inteira, composto 1/2/3 anos) — exatamente o que a Localiza fez. Com a cesta atual (${nb} modelos) o gap chega a <b>${nossoJun24}%</b> em jun/24, <b>colado nos −11,2% reportados</b>. <b style="color:#c0392b">Ressalva:</b> o trim básico vai saindo de linha na FIPE e a <b>cobertura cai</b> (chega a ${nMin <= 1 ? "<b>1 modelo</b>" : nMin + " modelos"} — passe o mouse); por isso a curva vai <b>até dez/2025</b> (em 2026 sobra ~1 trim isolado, não comparável). Para a dinâmica recente, use a <b>cesta variável</b>.`;
+  const notaVar =
+    `<b>Leitura 2 — carteira de seminovos (1-3 anos) da frota RENT:</b> mede a variação mensal do gap (vs 0&nbsp;km) <b>casando o mesmo ano-modelo</b> entre meses consecutivos — acompanha <b>o mesmo carro envelhecendo</b> (AM 2025 em jun vs AM 2025 em mai), nunca troca de ano-modelo numa transição, então <b>não há quebra de janeiro</b> (salto residual ~0,5pp, vs +8% no método ingênuo). Encadeado, frota completa, <b>ponderado pelo volume do mix</b>, cobertura cheia até a ponta. Resultado: <b>${nossoJun24}%</b> em jun/24 — <b>colado nos −11,2% da Localiza</b> — seguindo a <b>${hojeStr}</b> hoje. Gap relativo, sem inflação (razão no mesmo mês).`;
+  document.getElementById("killerNota").innerHTML =
+    (killerMet === "var" ? notaVar : notaFixo) + ` <span class="hint">Pior ponto: ${piorStr}. Alterne a leitura e monte a cesta nos botões acima.</span>`;
+}
 function renderFrotas() {
+  renderKillerSel();
+  renderKiller();
   const F = D.frotas;
   const empSel = document.getElementById("frEmpresa").value;
   const empresas = empSel === "ambas" ? ["Localiza", "Movida"] : [empSel];
