@@ -59,7 +59,6 @@
     <div class="legend" id="legend"></div>
     <div class="right">
       <div class="seg" id="seg"><button data-w="6" class="on">Últimos 6T</button><button data-w="0">Histórico</button></div>
-      <button class="btn" onclick="downloadCSV()">⬇ Baixar base (CSV)</button>
     </div>
   </div>
   <div class="tabs" id="tabs"></div>
@@ -237,10 +236,6 @@ function postHeight(){try{parent.postMessage({type:'cheatsheet-height',height:Ma
 if(window.ResizeObserver){new ResizeObserver(postHeight).observe(document.body);}
 window.addEventListener('load',postHeight);window.addEventListener('resize',postHeight);
 
-function downloadCSV(){const keys=Object.keys(S);let rows=[['Metrica','Empresa',...Q].join(';')];
-  keys.forEach(k=>CO.forEach(co=>rows.push([k,co,...S[k][co].map(v=>v==null?'':String(v).replace('.',','))].join(';'))));
-  const blob=new Blob(['﻿'+rows.join('\n')],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='car_rental_base_'+Q[Q.length-1]+'.csv';a.click();}
 </script>
 </body>
 </html>
