@@ -429,10 +429,19 @@
     <div class="logo-text">Transportation &amp; Capital Goods Hub</div>
   </div>
   <div class="topbar-right">
+    <button id="installBtn" class="logout-btn" style="display:none">⤓ Instalar app</button>
     <span class="autores">Daniel Gasparete &middot; Gabriel Rezende &middot; Pedro Tineo</span>
     <button class="logout-btn" onclick="doLogout()">Sair</button>
   </div>
 </div>
+<script>
+  (function () {
+    var dp = null, b = document.getElementById("installBtn");
+    window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); dp = e; if (b) b.style.display = "inline-flex"; });
+    if (b) b.addEventListener("click", function () { if (!dp) return; dp.prompt(); dp.userChoice.finally(function () { dp = null; b.style.display = "none"; }); });
+    window.addEventListener("appinstalled", function () { if (b) b.style.display = "none"; });
+  })();
+</script>
 
 <!-- abinhas pra mostrar/ocultar menu (esq) e painel (dir) -->
 <button id="leftHandle" onclick="toggleLeft()" title="Mostrar/ocultar menu"></button>
