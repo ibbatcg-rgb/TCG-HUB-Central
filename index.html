@@ -379,6 +379,39 @@
     aside.nav { display: none; }
     .page-pad { padding: 22px 16px; }
   }
+
+  /* caixinha de novidades (home) */
+  .aviso-novidades {
+    display: none; align-items: flex-start; gap: 12px;
+    background: #fff; border: 1px solid var(--border);
+    border-left: 4px solid var(--orange);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 14px 40px 14px 16px; margin-bottom: 22px; position: relative;
+  }
+  .aviso-novidades .av-ico {
+    flex: 0 0 auto; width: 34px; height: 34px; border-radius: 8px;
+    background: #fff4ec; color: var(--orange);
+    display: flex; align-items: center; justify-content: center; font-size: 1.1rem;
+  }
+  .aviso-novidades .av-body { flex: 1 1 auto; }
+  .aviso-novidades .av-title {
+    font-weight: 700; font-size: .9rem; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .aviso-novidades .av-badge {
+    background: var(--orange); color: #fff; font-size: .58rem; font-weight: 800;
+    letter-spacing: .5px; text-transform: uppercase; padding: 2px 7px; border-radius: 20px;
+  }
+  .aviso-novidades ul { list-style: none; margin: 0; padding: 0; font-size: .83rem; color: var(--text-muted); }
+  .aviso-novidades li { padding: 2px 0 2px 16px; position: relative; }
+  .aviso-novidades li::before { content: "\203A"; position: absolute; left: 3px; color: var(--orange); font-weight: 800; }
+  .aviso-novidades li b { color: var(--text); font-weight: 600; }
+  .aviso-novidades .av-close {
+    position: absolute; top: 8px; right: 10px; background: transparent; border: none;
+    color: var(--text-muted); font-size: 1.2rem; line-height: 1; cursor: pointer;
+    padding: 2px 6px; border-radius: 5px; transition: background .15s, color .15s;
+  }
+  .aviso-novidades .av-close:hover { background: var(--gray-100); color: var(--text); }
 </style>
 </head>
 <body>
@@ -436,10 +469,31 @@
 </div>
 <script>
   (function () {
-    var dp = null, b = document.getElementById("installBtn");
+    var b = document.getElementById("installBtn"), dp = null;
+    var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent || "");
+    var standalone = ("standalone" in navigator && navigator.standalone) || matchMedia("(display-mode: standalone)").matches;
     window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); dp = e; if (b) b.style.display = "inline-flex"; });
-    if (b) b.addEventListener("click", function () { if (!dp) return; dp.prompt(); dp.userChoice.finally(function () { dp = null; b.style.display = "none"; }); });
     window.addEventListener("appinstalled", function () { if (b) b.style.display = "none"; });
+    if (isIOS && !standalone && b) b.style.display = "inline-flex"; // iOS: sem API -> guia manual
+    if (b) b.addEventListener("click", function () {
+      if (dp) { dp.prompt(); dp.userChoice.finally(function () { dp = null; b.style.display = "none"; }); return; }
+      if (isIOS) guiaIOS();
+    });
+    function guiaIOS() {
+      if (document.getElementById("iosGuide")) return;
+      var ov = document.createElement("div");
+      ov.id = "iosGuide";
+      ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:flex-end;justify-content:center;padding:0 14px 24px";
+      ov.innerHTML = '<div style="background:#fff;color:#1a1a1a;border-radius:16px;max-width:420px;width:100%;padding:18px;box-shadow:0 8px 40px rgba(0,0,0,.3)">' +
+        '<div style="font-weight:700;font-size:1.02rem;margin-bottom:8px">Instalar no iPhone</div>' +
+        '<div style="font-size:.92rem;line-height:1.65;color:#333">1. Toque em <b>Compartilhar</b> <span style="border:1px solid #bbb;border-radius:5px;padding:0 5px">&#x2191;</span> na barra do Safari.<br>2. Role e toque em <b>&ldquo;Adicionar &agrave; Tela de In&iacute;cio&rdquo;</b>.<br>3. Toque em <b>Adicionar</b>.</div>' +
+        '<div style="font-size:.78rem;color:#888;margin-top:10px">Precisa ser pelo <b>Safari</b> &mdash; o Chrome do iPhone n&atilde;o permite (regra da Apple).</div>' +
+        '<button id="iosGuideClose" style="margin-top:14px;width:100%;padding:11px;border:none;border-radius:10px;background:#FF6200;color:#fff;font-weight:600;font-size:.95rem;cursor:pointer">Entendi</button></div>';
+      document.body.appendChild(ov);
+      var close = function () { ov.remove(); };
+      ov.addEventListener("click", function (e) { if (e.target === ov) close(); });
+      document.getElementById("iosGuideClose").addEventListener("click", close);
+    }
   })();
 </script>
 
@@ -494,6 +548,18 @@
         <div class="page-head">
           <h1>Transportation &amp; Capital Goods Hub</h1>
           <p>Painel central &middot; rental, logistica, aviacao, auto parts e capital goods. <em>Passe o mouse em qualquer ticker da direita pra ver detalhes.</em></p>
+        </div>
+
+        <div class="aviso-novidades" id="avisoNovidades" data-versao="2026-07-01">
+          <div class="av-ico">&#128226;</div>
+          <div class="av-body">
+            <div class="av-title">Novidades <span class="av-badge">Atualizado</span></div>
+            <ul>
+              <li><b>FIPE de julho/2026</b> ja disponivel &middot; Top 50 e chineses atualizados.</li>
+              <li><b>Credito BC ate maio/2026</b> &middot; saldo, concessoes, juros e inadimplencia (PF e PJ).</li>
+            </ul>
+          </div>
+          <button class="av-close" id="avisoClose" aria-label="Fechar aviso" title="Fechar">&times;</button>
         </div>
 
         <div class="grid-cards">
@@ -937,6 +1003,22 @@
   fetchNews(); // busca news.json (renderiza ao terminar)
   setInterval(fetchNews, 5 * 60 * 1000); // re-fetch a cada 5 min
   showSection('home'); // abre sempre na Visao Geral
+
+  // caixinha de novidades: mostra 1x por versao (fechou -> nao volta ate sair dado novo)
+  (function(){
+    var el = document.getElementById('avisoNovidades');
+    if(!el) return;
+    var v = el.getAttribute('data-versao');
+    var visto = null;
+    try { visto = localStorage.getItem('hubAviso'); } catch(e){}
+    if(visto === v) return; // ja fechou esta versao
+    el.style.display = 'flex';
+    var btn = document.getElementById('avisoClose');
+    if(btn) btn.addEventListener('click', function(){
+      el.style.display = 'none';
+      try { localStorage.setItem('hubAviso', v); } catch(e){}
+    });
+  })();
 </script>
 
 </div>
